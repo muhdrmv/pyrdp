@@ -10,6 +10,8 @@ from logging import LoggerAdapter
 from typing import Optional
 
 import json
+import datetime;
+from pyrdp.mitm.config import MITMConfig
 
 class STAT:
     """
@@ -118,7 +120,7 @@ class StatCounter:
     Class that keeps track of various statistics during an RDP connection (See STAT)
     """
 
-    def __init__(self):
+    def __init__(self, config: MITMConfig):
         self.stats = {"report": 1.0}  # 1.0 = True
 
     def increment(self, *args: str):
@@ -147,7 +149,8 @@ class StatCounter:
         """
         self.stats[STAT.CONNECTION_TIME] = time.time()
 
-    def stop(self):
+    def stop(self, config: MITMConfig):
+        self.config = config
         """
         Calculates the last statistics such as interaction ratio and connectionTime
         """
@@ -156,9 +159,25 @@ class StatCounter:
         self.incrementWith(STAT.TOTAL_OUTPUT, STAT.MCS_OUTPUT, STAT.IO_OUTPUT_FASTPATH, STAT.VIRTUAL_CHANNEL_OUTPUT, STAT.CLIPBOARD_SERVER, STAT.DEVICE_REDIRECTION_SERVER)
         if self.stats[STAT.TOTAL_OUTPUT] > 0:
             self.stats[STAT.CLIENT_SERVER_RATIO] = self.stats[STAT.TOTAL_INPUT] / self.stats[STAT.TOTAL_OUTPUT]
+            ct = datetime.datetime.now()
+            new_data = {   
+                    "action":"Server disconnected",
+                    "session_id": self.config.sessionId,
+                    "time": ct.timestamp(),
+                }
+            
+            with open('/store/transparent/logs/closed_servers.json','r+') as file:
+                # First we load existing data into a dict.
+                file_data = json.load(file)
+                # Join new_data with file_data inside emp_details
+                file_data["data"].append(new_data)
+                # Sets file's current position at offset.
+                file.seek(0)
+                # convert back to json.
+                json.dump(file_data, file, indent = 4)
+                # Marvi
 
         
-
 
     def logReport(self, log: LoggerAdapter, more_info: Optional[Mapping] = None):
         """
@@ -174,19 +193,6 @@ class StatCounter:
             report_data = self.stats
 
         keys = ", ".join([f"{key}: %({key})s" for key in report_data.keys()])
-        # Marvi
-            # self.log
-            # stat
-        with open("/root/rjpn/transparent/logs/closed_servers.json", "w") as outfile:
-            # First we load existing data into a dict.
-            file_data = json.load(outfile)
-            # Join new_data with file_data inside emp_details
-            file_data["data"].append(keys)
-            # Sets file's current position at offset.
-            outfile.seek(0)
-            # convert back to json.
-            json.dump(file_data, outfile, indent = 4)
-        # Marvi
         log.info(f"Connection report: {keys}", report_data)
         
- 
+        
